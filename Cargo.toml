@@ -1,0 +1,26 @@
+[package]
+name = "arbitrum-cli"
+version = "0.1.0"
+edition = "2021"
+description = "Agent-first Arbitrum CLI. JSON in/out, MCP-compatible, single binary."
+license = "MIT"
+repository = "https://github.com/kcolbchain/arbitrum-cli"
+homepage = "https://kcolbchain.com"
+authors = ["kcolbchain <krishna@kcolbchain.com>"]
+keywords = ["arbitrum", "cli", "agent", "blockchain", "rust"]
+categories = ["command-line-utilities"]
+readme = "README.md"
+
+[[bin]]
+name = "arbitrum-cli"
+path = "src/main.rs"
+
+[dependencies]
+clap = { version = "4", features = ["derive", "env"] }
+tokio = { version = "1", features = ["full"] }
+reqwest = { version = "0.12", features = ["json"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+eyre = "0.6"
+colored = "2"
+hex = "0.4"
