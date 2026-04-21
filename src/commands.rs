@@ -1,3 +1,7 @@
+use crate::agent_deposit::{
+    self, agent_deposit_address, encode_address_call, encode_uint256_call, fetch_chain_id,
+    format_balance_response, format_unsigned_tx, read_balance, read_registered, selectors, Action,
+};
 use crate::output::{emit, Mode};
 use crate::rpc::{hex_to_u64, rpc_call, wei_hex_to_eth};
 use eyre::{eyre, Result};
@@ -155,8 +159,8 @@ pub async fn watch(rpc: &str, target: &str, mode: Mode) -> Result<()> {
 
 // ── exec (generic RPC passthrough — agent-friendly) ──
 pub async fn exec(rpc: &str, method: &str, params: &str, mode: Mode) -> Result<()> {
-    let params_val: Value = serde_json::from_str(params)
-        .map_err(|e| eyre!("Invalid params JSON: {}", e))?;
+    let params_val: Value =
+        serde_json::from_str(params).map_err(|e| eyre!("Invalid params JSON: {}", e))?;
     let result = rpc_call(rpc, method, params_val).await?;
     let out = json!({
         "method": method,
@@ -191,6 +195,83 @@ pub fn info(mode: Mode) -> Result<()> {
         }
     });
     emit(mode, "arbitrum-cli info", &out);
+    Ok(())
+}
+
+// ── agent-deposit (Create Protocol) ──
+//
+// Phase 1 of Create Protocol is an agent-economy on Arbitrum: agents register,
+// deposit USDC, execute tasks, earn fees. This command gives the CLI a
+// first-class verb for the AgentDeposit contract so an LLM can do the full
+// loop (check balance → prepare deposit/withdraw tx) from one binary.
+//
+// Reads go through `eth_call` and return decoded JSON. Writes return unsigned
+// calldata — the CLI is strictly key-less; agents sign with switchboard or
+// any wallet and broadcast via `exec eth_sendRawTransaction`.
+pub async fn agent_deposit(
+    rpc: &str,
+    address: &str,
+    action_str: &str,
+    amount: Option<u128>,
+    contract_override: Option<&str>,
+    mode: Mode,
+) -> Result<()> {
+    let action = Action::parse(action_str)?;
+
+    // Resolve contract: explicit override wins, else look up by chain id. We
+    // call eth_chainId either way so the emitted JSON records which chain
+    // the caller is actually talking to — avoids silent testnet/mainnet
+    // confusion when an agent is driving.
+    let chain_id = fetch_chain_id(rpc).await?;
+    let contract = match contract_override {
+        Some(c) => c.to_string(),
+        None => agent_deposit_address(chain_id)
+            .ok_or_else(|| {
+                eyre!(
+                    "No AgentDeposit deployment registered for chain id {}. \
+                     Pass --contract <address> or use an Arbitrum RPC.",
+                    chain_id
+                )
+            })?
+            .to_string(),
+    };
+
+    match action {
+        Action::Balance => {
+            let raw = read_balance(rpc, &contract, address).await?;
+            let out = format_balance_response(address, &contract, chain_id, raw);
+            emit(mode, "Agent Deposit Balance", &out);
+        }
+        Action::Registered => {
+            let is_reg = read_registered(rpc, &contract, address).await?;
+            let out = json!({
+                "agent": address,
+                "contract": contract,
+                "chain_id": chain_id,
+                "action": "registered",
+                "registered": is_reg,
+            });
+            emit(mode, "Agent Registration", &out);
+        }
+        Action::Deposit | Action::Withdraw => {
+            let amt = amount.ok_or_else(|| {
+                eyre!("--amount is required for deposit/withdraw (raw units; USDC = 6 decimals)")
+            })?;
+            let (selector, label, action_tag) = match action {
+                Action::Deposit => (selectors::DEPOSIT, "Agent Deposit (unsigned)", "deposit"),
+                Action::Withdraw => (selectors::WITHDRAW, "Agent Withdraw (unsigned)", "withdraw"),
+                _ => unreachable!(),
+            };
+            let data = encode_uint256_call(selector, amt)?;
+            let out = format_unsigned_tx(action_tag, address, &contract, chain_id, amt, &data);
+            emit(mode, label, &out);
+        }
+    }
+
+    // Silence "unused import" if the module-private helpers change shape in
+    // the future — these re-exports document the full surface used here.
+    let _ = (agent_deposit::selectors::BALANCE_OF, encode_address_call);
+
     Ok(())
 }
 

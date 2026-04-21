@@ -1,5 +1,6 @@
 use clap::{Parser, Subcommand};
 
+mod agent_deposit;
 mod commands;
 mod output;
 mod rpc;
@@ -89,6 +90,30 @@ enum Commands {
         bind: String,
     },
 
+    /// Interact with Create Protocol AgentDeposit on Arbitrum
+    ///
+    /// Read agent balance / registration state, or produce unsigned calldata
+    /// for deposit/withdraw (sign + broadcast externally — the CLI never
+    /// touches keys).
+    AgentDeposit {
+        /// Agent wallet address (the EOA that registers + deposits)
+        address: String,
+
+        /// What to do: balance | deposit | withdraw | registered
+        #[arg(long, default_value = "balance")]
+        action: String,
+
+        /// Amount in raw on-chain units (USDC = 6 decimals; 1 USDC = 1000000).
+        /// Required for deposit / withdraw.
+        #[arg(long)]
+        amount: Option<u128>,
+
+        /// Override the AgentDeposit contract address (advanced; defaults to
+        /// the deployment registered for the connected chain).
+        #[arg(long)]
+        contract: Option<String>,
+    },
+
     /// Print supported chains and info
     Info,
 }
@@ -119,6 +144,22 @@ async fn main() -> eyre::Result<()> {
             commands::exec(&rpc_url, &method, &params, out_mode).await?
         }
         Commands::Mcp { bind } => commands::mcp(&rpc_url, &bind).await?,
+        Commands::AgentDeposit {
+            address,
+            action,
+            amount,
+            contract,
+        } => {
+            commands::agent_deposit(
+                &rpc_url,
+                &address,
+                &action,
+                amount,
+                contract.as_deref(),
+                out_mode,
+            )
+            .await?
+        }
         Commands::Info => commands::info(out_mode)?,
     }
 

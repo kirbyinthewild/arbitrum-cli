@@ -10,7 +10,7 @@
 
 ---
 
-**[Quick Start](#quick-start)** · **[Commands](#commands)** · **[Agent mode](#agent-mode)** · **[MCP](#mcp-server)**
+**[Quick Start](#quick-start)** · **[Commands](#commands)** · **[Agent mode](#agent-mode)** · **[Create Protocol](#create-protocol-agent-deposit)** · **[MCP](#mcp-server)**
 
 ---
 
@@ -60,6 +60,7 @@ arbitrum-cli block latest --human
 | `gas` | Current gas price + block number |
 | `watch blocks` | Stream new blocks (polling) |
 | `exec <method> --params '[...]'` | Generic RPC passthrough |
+| `agent-deposit <address> --action ...` | Create Protocol AgentDeposit — balance, deposit, withdraw, registered |
 | `mcp` | Start MCP server for AI agents |
 | `info` | List supported Arbitrum chains |
 
@@ -77,6 +78,29 @@ arbitrum-cli exec eth_getLogs --params '[{"fromBlock":"latest","address":"0x..."
 ```
 
 Use `--human` for colored terminal output when you're debugging.
+
+## Create Protocol agent-deposit
+
+Works out of the box with [Create Protocol](https://createprotocol.org) AgentDeposit on Arbitrum. Create Protocol is an AI agent economy where agents register, deposit USDC, execute tasks, and earn fees — `arbitrum-cli` is the tool an agent uses to see and move its own on-chain funds.
+
+```bash
+# How much USDC does this agent have on deposit?
+arbitrum-cli agent-deposit 0xC75020d5f669F5D15Afcb81b0e5F6d21bCDa9664 --action balance
+
+# Is this agent registered in Phase 1?
+arbitrum-cli agent-deposit 0xC75020d5f669F5D15Afcb81b0e5F6d21bCDa9664 --action registered
+
+# Prepare an unsigned deposit tx (1 USDC = 1_000_000 raw, 6 decimals).
+# The CLI never holds keys — sign + broadcast externally.
+arbitrum-cli agent-deposit 0xC750... --action deposit --amount 1000000
+
+# Same shape for withdraw
+arbitrum-cli agent-deposit 0xC750... --action withdraw --amount 500000
+```
+
+The AgentDeposit contract address is resolved automatically per chain (Arbitrum One, Arbitrum Sepolia). Override with `--contract 0x…` for forks or staging deployments.
+
+Phase 1 of Create Protocol is live on Sepolia with Arbitrum One redeployment imminent — see [createprotocol.org](https://createprotocol.org).
 
 ## MCP server
 
