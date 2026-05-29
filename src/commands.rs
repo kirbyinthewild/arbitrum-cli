@@ -4,8 +4,38 @@ use crate::agent_deposit::{
 };
 use crate::output::{emit, Mode};
 use crate::rpc::{hex_to_u64, rpc_call, wei_hex_to_eth};
+use clap::Command;
+use colored::Colorize;
 use eyre::{eyre, Result};
 use serde_json::{json, Value};
+
+struct SupportedChain {
+    chain_id: u64,
+    name: &'static str,
+    rpc_default: &'static str,
+    explorer: &'static str,
+    usdc: &'static str,
+    uniswap_v3_quoter: Option<&'static str>,
+}
+
+const SUPPORTED_CHAINS: &[SupportedChain] = &[
+    SupportedChain {
+        chain_id: 42161,
+        name: "Arbitrum One",
+        rpc_default: "https://arb1.arbitrum.io/rpc",
+        explorer: "https://arbiscan.io",
+        usdc: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
+        uniswap_v3_quoter: Some("0xb27308f9F90D607463bb33eA1BeBb41C27CE5AB6"),
+    },
+    SupportedChain {
+        chain_id: 421614,
+        name: "Arbitrum Sepolia",
+        rpc_default: "https://sepolia-rollup.arbitrum.io/rpc",
+        explorer: "https://sepolia.arbiscan.io",
+        usdc: "0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d",
+        uniswap_v3_quoter: None,
+    },
+];
 
 // ── block ──
 pub async fn block(rpc: &str, block: &str, mode: Mode) -> Result<()> {
@@ -170,31 +200,116 @@ pub async fn exec(rpc: &str, method: &str, params: &str, mode: Mode) -> Result<(
     Ok(())
 }
 
-// ── info ──
-pub fn info(mode: Mode) -> Result<()> {
-    let out = json!({
+fn chain_inventory() -> Vec<Value> {
+    SUPPORTED_CHAINS
+        .iter()
+        .map(|chain| {
+            json!({
+                "chain_id": chain.chain_id,
+                "name": chain.name,
+                "rpc_default": chain.rpc_default,
+                "explorer": chain.explorer,
+                "contracts": {
+                    "usdc": chain.usdc,
+                    "agent_deposit": agent_deposit_address(chain.chain_id),
+                    "uniswap_v3_quoter": chain.uniswap_v3_quoter,
+                },
+            })
+        })
+        .collect()
+}
+
+fn subcommand_inventory(command: Command) -> Vec<Value> {
+    command
+        .get_subcommands()
+        .map(|subcommand| {
+            let args: Vec<Value> = subcommand
+                .get_arguments()
+                .map(|arg| {
+                    json!({
+                        "name": arg.get_id().as_str(),
+                        "required": arg.is_required_set(),
+                        "help": arg.get_help().map(|help| help.to_string()),
+                    })
+                })
+                .collect();
+
+            json!({
+                "name": subcommand.get_name(),
+                "description": subcommand.get_about().map(|about| about.to_string()),
+                "args": args,
+            })
+        })
+        .collect()
+}
+
+pub(crate) fn info_inventory(command: Command) -> Value {
+    json!({
         "name": "arbitrum-cli",
         "version": env!("CARGO_PKG_VERSION"),
         "brand": "kcolbchain",
-        "chains": {
-            "arbitrum_one": {
-                "chain_id": 42161,
-                "rpc": "https://arb1.arbitrum.io/rpc",
-                "explorer": "https://arbiscan.io"
-            },
-            "arbitrum_nova": {
-                "chain_id": 42170,
-                "rpc": "https://nova.arbitrum.io/rpc",
-                "explorer": "https://nova.arbiscan.io"
-            },
-            "arbitrum_sepolia": {
-                "chain_id": 421614,
-                "rpc": "https://sepolia-rollup.arbitrum.io/rpc",
-                "explorer": "https://sepolia.arbiscan.io"
-            }
-        }
-    });
-    emit(mode, "arbitrum-cli info", &out);
+        "chains": chain_inventory(),
+        "subcommands": subcommand_inventory(command),
+    })
+}
+
+fn print_info_human(inventory: &Value) {
+    println!("\n  {} {}", "✓".green().bold(), "arbitrum-cli info".bold());
+    println!("  {}", "─".repeat(72).dimmed());
+    println!(
+        "  {} {}",
+        "version:".cyan(),
+        inventory["version"].as_str().unwrap_or_default()
+    );
+
+    println!("\n  {}", "Chains".cyan().bold());
+    println!("  {:<18} {:<8} {:<38} Explorer", "Name", "Chain", "RPC");
+    for chain in inventory["chains"].as_array().into_iter().flatten() {
+        println!(
+            "  {:<18} {:<8} {:<38} {}",
+            chain["name"].as_str().unwrap_or_default(),
+            chain["chain_id"].as_u64().unwrap_or_default(),
+            chain["rpc_default"].as_str().unwrap_or_default(),
+            chain["explorer"].as_str().unwrap_or_default()
+        );
+        let contracts = &chain["contracts"];
+        println!(
+            "    USDC: {}",
+            contracts["usdc"].as_str().unwrap_or("not configured")
+        );
+        println!(
+            "    AgentDeposit: {}",
+            contracts["agent_deposit"]
+                .as_str()
+                .unwrap_or("not configured")
+        );
+        println!(
+            "    Uniswap V3 Quoter: {}",
+            contracts["uniswap_v3_quoter"]
+                .as_str()
+                .unwrap_or("not configured")
+        );
+    }
+
+    println!("\n  {}", "Subcommands".cyan().bold());
+    println!("  {:<16} Description", "Name");
+    for subcommand in inventory["subcommands"].as_array().into_iter().flatten() {
+        println!(
+            "  {:<16} {}",
+            subcommand["name"].as_str().unwrap_or_default(),
+            subcommand["description"].as_str().unwrap_or_default()
+        );
+    }
+    println!();
+}
+
+// ── info ──
+pub fn info(mode: Mode, command: Command) -> Result<()> {
+    let inventory = info_inventory(command);
+    match mode {
+        Mode::Json => emit(mode, "arbitrum-cli info", &inventory),
+        Mode::Human => print_info_human(&inventory),
+    }
     Ok(())
 }
 

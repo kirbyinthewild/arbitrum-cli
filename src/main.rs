@@ -1,4 +1,4 @@
-use clap::{Parser, Subcommand};
+use clap::{CommandFactory, Parser, Subcommand};
 
 mod agent_deposit;
 mod commands;
@@ -160,8 +160,44 @@ async fn main() -> eyre::Result<()> {
             )
             .await?
         }
-        Commands::Info => commands::info(out_mode)?,
+        Commands::Info => commands::info(out_mode, Cli::command())?,
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn info_inventory_starts_with_arbitrum_one() {
+        let inventory = commands::info_inventory(Cli::command());
+        assert_eq!(inventory["chains"][0]["chain_id"], 42161);
+    }
+
+    #[test]
+    fn info_inventory_includes_every_clap_subcommand() {
+        let command = Cli::command();
+        let expected: Vec<String> = command
+            .get_subcommands()
+            .map(|subcommand| subcommand.get_name().to_string())
+            .collect();
+        let inventory = commands::info_inventory(command);
+        let actual: Vec<String> = inventory["subcommands"]
+            .as_array()
+            .expect("subcommands array")
+            .iter()
+            .map(|subcommand| {
+                subcommand["name"]
+                    .as_str()
+                    .expect("subcommand name")
+                    .to_string()
+            })
+            .collect();
+
+        assert_eq!(actual, expected);
+        assert!(actual.contains(&"agent-deposit".to_string()));
+        assert!(actual.contains(&"info".to_string()));
+    }
 }
