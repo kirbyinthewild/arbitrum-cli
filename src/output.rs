@@ -13,11 +13,15 @@ pub enum Mode {
 pub fn emit(mode: Mode, label: &str, value: &Value) {
     match mode {
         Mode::Json => {
-            println!("{}", serde_json::to_string(value).unwrap_or_default());
+            let value = serde_json::to_string(value).unwrap_or_default();
+            println!("{value}");
         }
         Mode::Human => {
-            println!("\n  {} {}", "✓".green().bold(), label.bold());
-            println!("  {}", "─".repeat(50).dimmed());
+            let check = "✓".green().bold();
+            let label = label.bold();
+            println!("\n  {check} {label}");
+            let divider = "─".repeat(50).dimmed();
+            println!("  {divider}");
             print_value(value, 2);
             println!();
         }
@@ -31,7 +35,8 @@ fn print_value(value: &Value, indent: usize) {
             for (k, v) in map {
                 match v {
                     Value::Object(_) | Value::Array(_) => {
-                        println!("{}{}", pad, k.cyan().bold());
+                        let key = k.cyan().bold();
+                        println!("{pad}{key}");
                         print_value(v, indent + 2);
                     }
                     _ => {
@@ -39,19 +44,21 @@ fn print_value(value: &Value, indent: usize) {
                             Value::String(s) => s.clone(),
                             _ => v.to_string(),
                         };
-                        println!("{}{}: {}", pad, k.cyan(), val_str);
+                        let key = k.cyan();
+                        println!("{pad}{key}: {val_str}");
                     }
                 }
             }
         }
         Value::Array(arr) => {
             for (i, item) in arr.iter().enumerate() {
-                println!("{}[{}]", pad, i.to_string().dimmed());
+                let index = i.to_string().dimmed();
+                println!("{pad}[{index}]");
                 print_value(item, indent + 2);
             }
         }
         other => {
-            println!("{}{}", pad, other);
+            println!("{pad}{other}");
         }
     }
 }
