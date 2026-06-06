@@ -197,7 +197,7 @@ mod tests {
             .collect();
 
         assert_eq!(actual, expected);
-        assert!(actual.contains(&"agent-deposit".to_string()));
-        assert!(actual.contains(&"info".to_string()));
+        assert!(actual.iter().any(|name| name == "agent-deposit"));
+        assert!(actual.iter().any(|name| name == "info"));
     }
 }
