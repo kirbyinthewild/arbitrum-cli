@@ -1,6 +1,6 @@
 use crate::agent_deposit::{
-    self, agent_deposit_address, encode_address_call, encode_uint256_call, fetch_chain_id,
-    format_balance_response, format_unsigned_tx, read_balance, read_registered, selectors, Action,
+    agent_deposit_address, encode_uint256_call, fetch_chain_id, format_balance_response,
+    format_unsigned_tx, read_balance, read_registered, selectors, Action,
 };
 use crate::output::{emit, Mode};
 use crate::rpc::{hex_to_u64, rpc_call, wei_hex_to_eth};
@@ -43,7 +43,7 @@ pub async fn block(rpc: &str, block: &str, mode: Mode) -> Result<()> {
         json!(block)
     } else {
         let n: u64 = block.parse().map_err(|_| eyre!("invalid block number"))?;
-        json!(format!("0x{:x}", n))
+        json!(format!("0x{n:x}"))
     };
     let result = rpc_call(rpc, "eth_getBlockByNumber", json!([block_param, false])).await?;
 
@@ -70,7 +70,7 @@ pub async fn block(rpc: &str, block: &str, mode: Mode) -> Result<()> {
 pub async fn tx(rpc: &str, hash: &str, mode: Mode) -> Result<()> {
     let result = rpc_call(rpc, "eth_getTransactionByHash", json!([hash])).await?;
     if result.is_null() {
-        return Err(eyre!("Transaction not found: {}", hash));
+        return Err(eyre!("Transaction not found: {hash}"));
     }
     emit(mode, "Transaction", &result);
     Ok(())
@@ -93,8 +93,9 @@ pub async fn balance(rpc: &str, address: &str, mode: Mode) -> Result<()> {
 // ── token balance ──
 pub async fn token_balance(rpc: &str, token: &str, address: &str, mode: Mode) -> Result<()> {
     // balanceOf(address) selector = 0x70a08231
-    let padded = format!("{:0>64}", address.trim_start_matches("0x"));
-    let data = format!("0x70a08231{}", padded);
+    let address = address.trim_start_matches("0x");
+    let padded = format!("{address:0>64}");
+    let data = format!("0x70a08231{padded}");
     let result = rpc_call(
         rpc,
         "eth_call",
@@ -181,8 +182,7 @@ pub async fn watch(rpc: &str, target: &str, mode: Mode) -> Result<()> {
         }
     } else {
         Err(eyre!(
-            "Unsupported watch target: {}. Use 'blocks' for now.",
-            target
+            "Unsupported watch target: {target}. Use 'blocks' for now."
         ))
     }
 }
@@ -190,7 +190,7 @@ pub async fn watch(rpc: &str, target: &str, mode: Mode) -> Result<()> {
 // ── exec (generic RPC passthrough — agent-friendly) ──
 pub async fn exec(rpc: &str, method: &str, params: &str, mode: Mode) -> Result<()> {
     let params_val: Value =
-        serde_json::from_str(params).map_err(|e| eyre!("Invalid params JSON: {}", e))?;
+        serde_json::from_str(params).map_err(|e| eyre!("Invalid params JSON: {e}"))?;
     let result = rpc_call(rpc, method, params_val).await?;
     let out = json!({
         "method": method,
@@ -254,51 +254,47 @@ pub(crate) fn info_inventory(command: Command) -> Value {
 }
 
 fn print_info_human(inventory: &Value) {
-    println!("\n  {} {}", "✓".green().bold(), "arbitrum-cli info".bold());
-    println!("  {}", "─".repeat(72).dimmed());
-    println!(
-        "  {} {}",
-        "version:".cyan(),
-        inventory["version"].as_str().unwrap_or_default()
-    );
+    let check = "✓".green().bold();
+    let title = "arbitrum-cli info".bold();
+    println!("\n  {check} {title}");
+    let divider = "─".repeat(72).dimmed();
+    println!("  {divider}");
+    let version = inventory["version"].as_str().unwrap_or_default();
+    let version_label = "version:".cyan();
+    println!("  {version_label} {version}");
 
-    println!("\n  {}", "Chains".cyan().bold());
-    println!("  {:<18} {:<8} {:<38} Explorer", "Name", "Chain", "RPC");
+    let chains = "Chains".cyan().bold();
+    println!("\n  {chains}");
+    println!(
+        "  {:<18} {:<8} RPC                                    Explorer",
+        "Name", "Chain"
+    );
     for chain in inventory["chains"].as_array().into_iter().flatten() {
-        println!(
-            "  {:<18} {:<8} {:<38} {}",
-            chain["name"].as_str().unwrap_or_default(),
-            chain["chain_id"].as_u64().unwrap_or_default(),
-            chain["rpc_default"].as_str().unwrap_or_default(),
-            chain["explorer"].as_str().unwrap_or_default()
-        );
+        let name = chain["name"].as_str().unwrap_or_default();
+        let chain_id = chain["chain_id"].as_u64().unwrap_or_default();
+        let rpc_default = chain["rpc_default"].as_str().unwrap_or_default();
+        let explorer = chain["explorer"].as_str().unwrap_or_default();
+        println!("  {name:<18} {chain_id:<8} {rpc_default:<38} {explorer}");
         let contracts = &chain["contracts"];
-        println!(
-            "    USDC: {}",
-            contracts["usdc"].as_str().unwrap_or("not configured")
-        );
-        println!(
-            "    AgentDeposit: {}",
-            contracts["agent_deposit"]
-                .as_str()
-                .unwrap_or("not configured")
-        );
-        println!(
-            "    Uniswap V3 Quoter: {}",
-            contracts["uniswap_v3_quoter"]
-                .as_str()
-                .unwrap_or("not configured")
-        );
+        let usdc = contracts["usdc"].as_str().unwrap_or("not configured");
+        println!("    USDC: {usdc}");
+        let agent_deposit = contracts["agent_deposit"]
+            .as_str()
+            .unwrap_or("not configured");
+        println!("    AgentDeposit: {agent_deposit}");
+        let uniswap_v3_quoter = contracts["uniswap_v3_quoter"]
+            .as_str()
+            .unwrap_or("not configured");
+        println!("    Uniswap V3 Quoter: {uniswap_v3_quoter}");
     }
 
-    println!("\n  {}", "Subcommands".cyan().bold());
-    println!("  {:<16} Description", "Name");
+    let subcommands = "Subcommands".cyan().bold();
+    println!("\n  {subcommands}");
+    println!("  Name             Description");
     for subcommand in inventory["subcommands"].as_array().into_iter().flatten() {
-        println!(
-            "  {:<16} {}",
-            subcommand["name"].as_str().unwrap_or_default(),
-            subcommand["description"].as_str().unwrap_or_default()
-        );
+        let name = subcommand["name"].as_str().unwrap_or_default();
+        let description = subcommand["description"].as_str().unwrap_or_default();
+        println!("  {name:<16} {description}");
     }
     println!();
 }
@@ -343,9 +339,8 @@ pub async fn agent_deposit(
         None => agent_deposit_address(chain_id)
             .ok_or_else(|| {
                 eyre!(
-                    "No AgentDeposit deployment registered for chain id {}. \
+                    "No AgentDeposit deployment registered for chain id {chain_id}. \
                      Pass --contract <address> or use an Arbitrum RPC.",
-                    chain_id
                 )
             })?
             .to_string(),
@@ -382,11 +377,6 @@ pub async fn agent_deposit(
             emit(mode, label, &out);
         }
     }
-
-    // Silence "unused import" if the module-private helpers change shape in
-    // the future — these re-exports document the full surface used here.
-    let _ = (agent_deposit::selectors::BALANCE_OF, encode_address_call);
-
     Ok(())
 }
 
@@ -395,7 +385,7 @@ pub async fn mcp(_rpc: &str, bind: &str) -> Result<()> {
     // MCP server stub — production version would expose tools via stdio or SSE
     // following the Model Context Protocol spec.
     eprintln!("MCP server mode — stub implementation");
-    eprintln!("Bind: {}", bind);
+    eprintln!("Bind: {bind}");
     eprintln!("Tools exposed: block, tx, balance, token, call, gas, exec");
     eprintln!();
     eprintln!("Full MCP implementation coming — this stub validates the tool shape.");
