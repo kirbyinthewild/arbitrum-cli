@@ -76,8 +76,7 @@ impl Action {
             "withdraw" => Ok(Action::Withdraw),
             "registered" | "is-registered" => Ok(Action::Registered),
             other => Err(eyre!(
-                "unknown agent-deposit action '{}'. Try: balance | deposit | withdraw | registered",
-                other
+                "unknown agent-deposit action '{other}'. Try: balance | deposit | withdraw | registered"
             )),
         }
     }
@@ -90,23 +89,24 @@ impl Action {
 pub fn encode_address_call(selector: &str, address: &str) -> Result<String> {
     let addr_hex = address.trim_start_matches("0x");
     if addr_hex.len() != 40 {
+        let len = addr_hex.len();
         return Err(eyre!(
-            "address must be 20 bytes (40 hex chars); got {} chars",
-            addr_hex.len()
+            "address must be 20 bytes (40 hex chars); got {len} chars"
         ));
     }
-    hex::decode(addr_hex).map_err(|e| eyre!("address is not valid hex: {}", e))?;
+    hex::decode(addr_hex).map_err(|e| eyre!("address is not valid hex: {e}"))?;
 
     let sel = selector.trim_start_matches("0x");
     if sel.len() != 8 {
+        let len = sel.len();
         return Err(eyre!(
-            "selector must be 4 bytes (8 hex chars); got {}",
-            sel.len()
+            "selector must be 4 bytes (8 hex chars); got {len}"
         ));
     }
-    hex::decode(sel).map_err(|e| eyre!("selector is not valid hex: {}", e))?;
+    hex::decode(sel).map_err(|e| eyre!("selector is not valid hex: {e}"))?;
 
-    Ok(format!("0x{}{:0>64}", sel, addr_hex.to_lowercase()))
+    let addr_hex = addr_hex.to_lowercase();
+    Ok(format!("0x{sel}{addr_hex:0>64}"))
 }
 
 /// Encode `selector(uint256)` calldata.
@@ -116,14 +116,14 @@ pub fn encode_address_call(selector: &str, address: &str) -> Result<String> {
 pub fn encode_uint256_call(selector: &str, amount: u128) -> Result<String> {
     let sel = selector.trim_start_matches("0x");
     if sel.len() != 8 {
+        let len = sel.len();
         return Err(eyre!(
-            "selector must be 4 bytes (8 hex chars); got {}",
-            sel.len()
+            "selector must be 4 bytes (8 hex chars); got {len}"
         ));
     }
-    hex::decode(sel).map_err(|e| eyre!("selector is not valid hex: {}", e))?;
+    hex::decode(sel).map_err(|e| eyre!("selector is not valid hex: {e}"))?;
 
-    Ok(format!("0x{}{:0>64x}", sel, amount))
+    Ok(format!("0x{sel}{amount:0>64x}"))
 }
 
 /// Decode a 32-byte hex word as a u128 (fits USDC amounts up to ~3.4e20 raw).
@@ -132,7 +132,7 @@ pub fn decode_uint_result(hex_word: &str) -> Result<u128> {
     if stripped.is_empty() {
         return Ok(0);
     }
-    u128::from_str_radix(stripped, 16).map_err(|e| eyre!("invalid hex uint: {}", e))
+    u128::from_str_radix(stripped, 16).map_err(|e| eyre!("invalid hex uint: {e}"))
 }
 
 /// Fetch the chain id from the RPC endpoint so we can resolve the right
