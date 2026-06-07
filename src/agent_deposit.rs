@@ -1,6 +1,6 @@
-//! AgentDeposit — Create Protocol agent funding primitive.
+//! `AgentDeposit` — Create Protocol agent funding primitive.
 //!
-//! AgentDeposit is the core contract in [Create Protocol] Phase 1: agents
+//! `AgentDeposit` is the core contract in [Create Protocol] Phase 1: agents
 //! register, deposit USDC, spend it on compute/tasks, and the protocol
 //! distributes fees. This module wraps the read-only surface (balance + agent
 //! metadata) so an AI agent can introspect its own on-chain state using only
@@ -11,7 +11,7 @@
 //! eth_sendRawTransaction` (or any wallet). This keeps the CLI read-safe by
 //! default; no keys ever touch this binary.
 //!
-//! **Contract addresses.** AgentDeposit is deployed on Sepolia today; Arbitrum
+//! **Contract addresses.** `AgentDeposit` is deployed on Sepolia today; Arbitrum
 //! One redeployment lands with Phase 1. To wire the real address, update the
 //! [`agent_deposit_address`] match — it's a one-line swap per chain.
 //!
@@ -21,7 +21,7 @@ use crate::rpc::{hex_to_u64, rpc_call};
 use eyre::{eyre, Result};
 use serde_json::{json, Value};
 
-/// ABI selectors for the Create Protocol AgentDeposit contract.
+/// ABI selectors for the Create Protocol `AgentDeposit` contract.
 ///
 /// These match the deployed Sepolia ABI (`AgentDeposit.sol`). Kept as string
 /// constants so they're easy to eyeball against an ABI file or a block
@@ -37,25 +37,23 @@ pub mod selectors {
     pub const IS_REGISTERED: &str = "0xc3c5a547";
 }
 
-/// Resolve the AgentDeposit contract address for a given chain id.
+/// Resolve the `AgentDeposit` contract address for a given chain id.
 ///
 /// Returns `None` until Create Protocol Phase 1 lands on that chain. Swapping
 /// in a real deployment is one line per arm.
 ///
 /// - Arbitrum One (42161): placeholder — Phase 1 deploy pending
 /// - Arbitrum Sepolia (421614): placeholder — mirrors staging deploy
-/// - All other chains: unsupported (AgentDeposit is Arbitrum-first)
+/// - All other chains: unsupported (`AgentDeposit` is Arbitrum-first)
 pub fn agent_deposit_address(chain_id: u64) -> Option<&'static str> {
     match chain_id {
-        // TODO(create-protocol): replace with real Arbitrum One deployment
-        42161 => Some("0x0000000000000000000000000000000000000000"),
-        // TODO(create-protocol): replace with real Arbitrum Sepolia deployment
-        421614 => Some("0x0000000000000000000000000000000000000000"),
+        // TODO(create-protocol): replace with real Arbitrum One/Sepolia deployment
+        42_161 | 421_614 => Some("0x0000000000000000000000000000000000000000"),
         _ => None,
     }
 }
 
-/// What the user asked us to do with the AgentDeposit contract.
+/// What the user asked us to do with the `AgentDeposit` contract.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Action {
     /// Read: `balanceOf(agent)` — returns USDC on deposit (raw + decimal).
@@ -112,7 +110,7 @@ pub fn encode_address_call(selector: &str, address: &str) -> Result<String> {
 /// Encode `selector(uint256)` calldata.
 ///
 /// The amount is a raw on-chain integer (e.g., USDC has 6 decimals, so
-/// $1.00 = 1_000_000). We keep the CLI honest — no hidden decimal scaling.
+/// $1.00 = `1_000_000`). We keep the CLI honest — no hidden decimal scaling.
 pub fn encode_uint256_call(selector: &str, amount: u128) -> Result<String> {
     let sel = selector.trim_start_matches("0x");
     if sel.len() != 8 {
@@ -136,7 +134,7 @@ pub fn decode_uint_result(hex_word: &str) -> Result<u128> {
 }
 
 /// Fetch the chain id from the RPC endpoint so we can resolve the right
-/// AgentDeposit deployment without asking the user.
+/// `AgentDeposit` deployment without asking the user.
 pub async fn fetch_chain_id(rpc: &str) -> Result<u64> {
     let result = rpc_call(rpc, "eth_chainId", json!([])).await?;
     let hex = result
@@ -145,7 +143,7 @@ pub async fn fetch_chain_id(rpc: &str) -> Result<u64> {
     hex_to_u64(hex)
 }
 
-/// Call `balanceOf(agent)` on AgentDeposit. Returns raw USDC (6 decimals).
+/// Call `balanceOf(agent)` on `AgentDeposit`. Returns raw USDC (6 decimals).
 pub async fn read_balance(rpc: &str, contract: &str, agent: &str) -> Result<u128> {
     let data = encode_address_call(selectors::BALANCE_OF, agent)?;
     let result = rpc_call(
@@ -183,7 +181,8 @@ pub fn format_balance_response(
     // AgentDeposit settles in USDC — 6 decimals. Scaling stays local to
     // presentation; the raw value is always the source of truth.
     const USDC_DECIMALS: u32 = 6;
-    let balance_human = balance_raw as f64 / 10f64.powi(USDC_DECIMALS as i32);
+    #[allow(clippy::cast_precision_loss)]
+    let balance_human = balance_raw as f64 / 10f64.powi(i32::try_from(USDC_DECIMALS).unwrap_or(6));
     json!({
         "agent": agent,
         "contract": contract,
@@ -304,8 +303,8 @@ mod tests {
     fn known_chains_resolve_address() {
         // Both arms return Some — the value is placeholder until Phase 1,
         // but the resolver contract must remain stable.
-        assert!(agent_deposit_address(42161).is_some());
-        assert!(agent_deposit_address(421614).is_some());
+        assert!(agent_deposit_address(42_161).is_some());
+        assert!(agent_deposit_address(421_614).is_some());
         assert!(agent_deposit_address(1).is_none());
     }
 

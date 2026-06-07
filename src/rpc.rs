@@ -38,5 +38,6 @@ pub fn hex_to_u64(hex: &str) -> Result<u64> {
 pub fn wei_hex_to_eth(hex: &str) -> Result<f64> {
     let stripped = hex.trim_start_matches("0x");
     let wei = u128::from_str_radix(stripped, 16).map_err(|e| eyre!("Invalid wei: {e}"))?;
+    #[allow(clippy::cast_precision_loss)]
     Ok(wei as f64 / 1e18)
 }

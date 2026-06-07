@@ -13,7 +13,7 @@ mod rpc;
     long_about = "A single Rust binary to query Arbitrum, interact with contracts, monitor events, and expose an MCP server for AI agents. Default output is JSON (agent-friendly). Use --human for pretty terminal output."
 )]
 struct Cli {
-    /// RPC URL (default: https://arb1.arbitrum.io/rpc)
+    /// RPC URL (default: <https://arb1.arbitrum.io/rpc>)
     #[arg(long, global = true, env = "ARBITRUM_RPC_URL")]
     rpc: Option<String>,
 
@@ -54,7 +54,7 @@ enum Commands {
         address: String,
     },
 
-    /// Read from a contract (eth_call)
+    /// Read from a contract (`eth_call`)
     Call {
         /// Contract address
         to: String,
@@ -75,7 +75,7 @@ enum Commands {
 
     /// Execute a generic JSON-RPC call (agent-friendly)
     Exec {
-        /// RPC method name (e.g., eth_blockNumber)
+        /// RPC method name (e.g., `eth_blockNumber`)
         method: String,
 
         /// Params as JSON array
@@ -90,7 +90,7 @@ enum Commands {
         bind: String,
     },
 
-    /// Interact with Create Protocol AgentDeposit on Arbitrum
+    /// Interact with Create Protocol `AgentDeposit` on Arbitrum
     ///
     /// Read agent balance / registration state, or produce unsigned calldata
     /// for deposit/withdraw (sign + broadcast externally — the CLI never
@@ -108,7 +108,7 @@ enum Commands {
         #[arg(long)]
         amount: Option<u128>,
 
-        /// Override the AgentDeposit contract address (advanced; defaults to
+        /// Override the `AgentDeposit` contract address (advanced; defaults to
         /// the deployment registered for the connected chain).
         #[arg(long)]
         contract: Option<String>,
@@ -135,15 +135,15 @@ async fn main() -> eyre::Result<()> {
         Commands::Tx { hash } => commands::tx(&rpc_url, &hash, out_mode).await?,
         Commands::Balance { address } => commands::balance(&rpc_url, &address, out_mode).await?,
         Commands::Token { token, address } => {
-            commands::token_balance(&rpc_url, &token, &address, out_mode).await?
+            commands::token_balance(&rpc_url, &token, &address, out_mode).await?;
         }
         Commands::Call { to, data } => commands::call(&rpc_url, &to, &data, out_mode).await?,
         Commands::Gas => commands::gas(&rpc_url, out_mode).await?,
         Commands::Watch { target } => commands::watch(&rpc_url, &target, out_mode).await?,
         Commands::Exec { method, params } => {
-            commands::exec(&rpc_url, &method, &params, out_mode).await?
+            commands::exec(&rpc_url, &method, &params, out_mode).await?;
         }
-        Commands::Mcp { bind } => commands::mcp(&rpc_url, &bind).await?,
+        Commands::Mcp { bind } => commands::mcp(&rpc_url, &bind)?,
         Commands::AgentDeposit {
             address,
             action,
@@ -158,9 +158,9 @@ async fn main() -> eyre::Result<()> {
                 contract.as_deref(),
                 out_mode,
             )
-            .await?
+            .await?;
         }
-        Commands::Info => commands::info(out_mode, Cli::command())?,
+        Commands::Info => commands::info(out_mode, &Cli::command())?,
     }
 
     Ok(())
@@ -172,8 +172,8 @@ mod tests {
 
     #[test]
     fn info_inventory_starts_with_arbitrum_one() {
-        let inventory = commands::info_inventory(Cli::command());
-        assert_eq!(inventory["chains"][0]["chain_id"], 42161);
+        let inventory = commands::info_inventory(&Cli::command());
+        assert_eq!(inventory["chains"][0]["chain_id"], 42_161);
     }
 
     #[test]
@@ -183,7 +183,7 @@ mod tests {
             .get_subcommands()
             .map(|subcommand| subcommand.get_name().to_string())
             .collect();
-        let inventory = commands::info_inventory(command);
+        let inventory = commands::info_inventory(&command);
         let actual: Vec<String> = inventory["subcommands"]
             .as_array()
             .expect("subcommands array")

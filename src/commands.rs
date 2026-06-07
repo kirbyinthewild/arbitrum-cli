@@ -20,7 +20,7 @@ struct SupportedChain {
 
 const SUPPORTED_CHAINS: &[SupportedChain] = &[
     SupportedChain {
-        chain_id: 42161,
+        chain_id: 42_161,
         name: "Arbitrum One",
         rpc_default: "https://arb1.arbitrum.io/rpc",
         explorer: "https://arbiscan.io",
@@ -28,7 +28,7 @@ const SUPPORTED_CHAINS: &[SupportedChain] = &[
         uniswap_v3_quoter: Some("0xb27308f9F90D607463bb33eA1BeBb41C27CE5AB6"),
     },
     SupportedChain {
-        chain_id: 421614,
+        chain_id: 421_614,
         name: "Arbitrum Sepolia",
         rpc_default: "https://sepolia-rollup.arbitrum.io/rpc",
         explorer: "https://sepolia.arbiscan.io",
@@ -119,7 +119,8 @@ pub async fn token_balance(rpc: &str, token: &str, address: &str, mode: Mode) ->
         .unwrap_or(18);
 
     let balance_raw = u128::from_str_radix(raw.trim_start_matches("0x"), 16).unwrap_or(0);
-    let balance_human = balance_raw as f64 / 10f64.powi(decimals as i32);
+    #[allow(clippy::cast_precision_loss)]
+    let balance_human = balance_raw as f64 / 10f64.powi(i32::try_from(decimals).unwrap_or(18));
 
     let out = json!({
         "token": token,
@@ -150,6 +151,7 @@ pub async fn gas(rpc: &str, mode: Mode) -> Result<()> {
     let block_num = rpc_call(rpc, "eth_blockNumber", json!([])).await?;
 
     let gas_hex = gas_price.as_str().unwrap_or("0x0");
+    #[allow(clippy::cast_precision_loss)]
     let gwei = u128::from_str_radix(gas_hex.trim_start_matches("0x"), 16).unwrap_or(0) as f64 / 1e9;
 
     let out = json!({
@@ -219,7 +221,7 @@ fn chain_inventory() -> Vec<Value> {
         .collect()
 }
 
-fn subcommand_inventory(command: Command) -> Vec<Value> {
+fn subcommand_inventory(command: &Command) -> Vec<Value> {
     command
         .get_subcommands()
         .map(|subcommand| {
@@ -229,21 +231,21 @@ fn subcommand_inventory(command: Command) -> Vec<Value> {
                     json!({
                         "name": arg.get_id().as_str(),
                         "required": arg.is_required_set(),
-                        "help": arg.get_help().map(|help| help.to_string()),
+                        "help": arg.get_help().map(std::string::ToString::to_string),
                     })
                 })
                 .collect();
 
             json!({
                 "name": subcommand.get_name(),
-                "description": subcommand.get_about().map(|about| about.to_string()),
+                "description": subcommand.get_about().map(std::string::ToString::to_string),
                 "args": args,
             })
         })
         .collect()
 }
 
-pub(crate) fn info_inventory(command: Command) -> Value {
+pub(crate) fn info_inventory(command: &Command) -> Value {
     json!({
         "name": "arbitrum-cli",
         "version": env!("CARGO_PKG_VERSION"),
@@ -300,7 +302,8 @@ fn print_info_human(inventory: &Value) {
 }
 
 // ── info ──
-pub fn info(mode: Mode, command: Command) -> Result<()> {
+#[allow(clippy::unnecessary_wraps)]
+pub fn info(mode: Mode, command: &Command) -> Result<()> {
     let inventory = info_inventory(command);
     match mode {
         Mode::Json => emit(mode, "arbitrum-cli info", &inventory),
@@ -381,7 +384,8 @@ pub async fn agent_deposit(
 }
 
 // ── mcp (stub) ──
-pub async fn mcp(_rpc: &str, bind: &str) -> Result<()> {
+#[allow(clippy::unnecessary_wraps)]
+pub fn mcp(_rpc: &str, bind: &str) -> Result<()> {
     // MCP server stub — production version would expose tools via stdio or SSE
     // following the Model Context Protocol spec.
     eprintln!("MCP server mode — stub implementation");
